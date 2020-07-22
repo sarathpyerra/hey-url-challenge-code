@@ -1,50 +1,50 @@
 # frozen_string_literal: true
 
 class UrlsController < ApplicationController
+  before_action :set_url , :only => [:visit,:show]
   def index
     @url = Url.new
-    @urls = [
-      Url.new(short_url: '123', original_url: 'http://google.com', created_at: Time.now),
-      Url.new(short_url: '456', original_url: 'http://facebook.com', created_at: Time.now),
-      Url.new(short_url: '789', original_url: 'http://yahoo.com', created_at: Time.now)
-    ]
+    @urls = Url.latest.includes(:clicks)
   end
 
   def create
-    # create a new URL record
+    @url = Url.new(url_params)
+    if @url.save
+      flash[:notice]="Sucessfully created url" 
+      redirect_to action: :index 
+    else
+      @urls = Url.all
+      render action: :index 
+    end
   end
 
   def show
-    @url = Url.new(short_url: '123', original_url: 'http://google.com', created_at: Time.now)
-    # implement queries
-    @daily_clicks = [
-      ['1', 13],
-      ['2', 2],
-      ['3', 1],
-      ['4', 7],
-      ['5', 20],
-      ['6', 18],
-      ['7', 10],
-      ['8', 20],
-      ['9', 15],
-      ['10', 5]
-    ]
-    @browsers_clicks = [
-      ['IE', 13],
-      ['Firefox', 22],
-      ['Chrome', 17],
-      ['Safari', 7]
-    ]
-    @platform_clicks = [
-      ['Windows', 13],
-      ['macOS', 22],
-      ['Ubuntu', 17],
-      ['Other', 7]
-    ]
+    if @url.present?
+      @daily_clicks = @url.get_daily_clicks
+      @browsers_clicks = @url.get_browser_clicks
+      @platform_clicks =@url.get_platform_clicks
+    else
+      render :file => "#{Rails.root}/public/404", :layout => false, :status => :not_found 
+    end
   end
 
   def visit
-    # params[:url]
-    # @url = find url
+    if @url.present?
+      #Track user requests
+      @browser = Browser.new(request.env["HTTP_USER_AGENT"])
+      @url.track_browser_details(@browser)
+      redirect_to @url.original_url
+    else
+      render :file => "#{Rails.root}/public/404", :layout => false, :status => :not_found 
+    end
+  end
+
+  private
+  def set_url 
+    @url = Url.find_by_short_url(params[:url])
+  end
+
+  def url_params
+    params.require(:url).permit(:original_url)
   end
 end
